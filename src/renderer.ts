@@ -125,6 +125,9 @@ export class Renderer {
     // Apply viewport transform
     this.viewport.applyToCanvas(ctx, dpr);
 
+    // Draw bus connections between devices (behind everything)
+    this.drawBusConnections(ctx);
+
     // Update and draw message flashes (behind nodes)
     this.updateFlashes();
     this.drawFlashes(ctx);
@@ -143,6 +146,33 @@ export class Renderer {
       ctx.textBaseline = 'middle';
       ctx.fillText('No devices connected', W / 2, H / 2);
     }
+  }
+
+  private drawBusConnections(ctx: CanvasRenderingContext2D): void {
+    if (this.devices.length < 2) return;
+
+    // Draw connections between all devices (assuming same bus)
+    // Style: subtle dashed lines like Gerasim's peer connections
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+
+    const centerX = (d: DeviceNode) => d.x + NODE_WIDTH / 2;
+    const centerY = (d: DeviceNode) => d.y + NODE_HEIGHT / 2;
+
+    // Connect each device to its neighbors in the circle
+    for (let i = 0; i < this.devices.length; i++) {
+      const a = this.devices[i];
+      const b = this.devices[(i + 1) % this.devices.length];
+
+      ctx.beginPath();
+      ctx.moveTo(centerX(a), centerY(a));
+      ctx.lineTo(centerX(b), centerY(b));
+      ctx.stroke();
+    }
+
+    // Reset line dash
+    ctx.setLineDash([]);
   }
 
   private drawDevice(ctx: CanvasRenderingContext2D, device: DeviceNode): void {
