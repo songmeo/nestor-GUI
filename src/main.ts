@@ -123,6 +123,7 @@ async function loadBoots(device: string): Promise<void> {
     const res = await api.getBoots(device);
     boots = res.boots || [];
     updateBootList();
+    updateDeviceNodes();  // Refresh to show boot count
     statusLeft.textContent = `${boots.length} boot session(s)`;
   } catch (err) {
     statusLeft.textContent = `Error loading boots: ${err instanceof Error ? err.message : 'Unknown'}`;
