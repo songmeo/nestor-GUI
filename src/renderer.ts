@@ -184,7 +184,7 @@ export class Renderer {
     ctx.fillText(`Last: ${lastHeard}`, x + 8, y + 48);
 
     // Boot count
-    ctx.fillText(`Boots: ${device.bootCount}`, x + 8, y + 64);
+    ctx.fillText(`Boots: ${device.bootCount < 0 ? '—' : device.bootCount}`, x + 8, y + 64);
 
     // Selection indicator
     if (isSelected) {
@@ -281,7 +281,7 @@ export class Renderer {
       `Device: ${device.device}`,
       `UID: 0x${device.lastUid.toString(16).toUpperCase()}`,
       `Last heard: ${new Date(device.lastHeardTs * 1000).toLocaleString()}`,
-      `Boot sessions: ${device.bootCount}`,
+      `Boot sessions: ${device.bootCount < 0 ? '(click to load)' : device.bootCount}`,
       `Status: ${device.isOnline ? 'Online' : 'Offline'}`,
     ];
 

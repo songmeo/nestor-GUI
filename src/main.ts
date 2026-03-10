@@ -316,7 +316,8 @@ function updateTimeline(): void {
 
 function updateDeviceNodes(): void {
   const nodes: DeviceNode[] = devices.map(d => {
-    const deviceBootCount = selectedDevice === d.device ? boots.length : 0;
+    // Show boots.length if this device is selected, otherwise show -1 (unknown)
+    const deviceBootCount = selectedDevice === d.device ? boots.length : -1;
     const now = Date.now() / 1000;
     const isOnline = (now - d.last_heard_ts) < 60; // Online if heard in last minute
 
