@@ -3,11 +3,9 @@
 // Entry point
 // ---------------------------------------------------------------------------
 
-import { api } from './api';
-import { Viewport } from './viewport';
-import { Renderer } from './renderer';
-import { Timeline } from './timeline';
-import type { Device, Boot, Record, DeviceNode, TimelineMessage } from './types';
+import { api } from "./api";
+import { Timeline } from "./timeline";
+import type { Device, Boot, Record, TimelineMessage } from "./types";
 
 // State
 let devices: Device[] = [];
@@ -17,11 +15,7 @@ let selectedDevice: string | null = null;
 let selectedBoot: number | null = null;
 
 // Components
-let renderer: Renderer;
 let timeline: Timeline;
-let viewport: Viewport;
-let canvas: HTMLCanvasElement;
-let timelineCanvas: HTMLCanvasElement;
 
 // DOM elements
 let deviceSelect: HTMLSelectElement;
@@ -32,6 +26,8 @@ let recordsBody: HTMLTableSectionElement;
 let statusLeft: HTMLElement;
 let statusRight: HTMLElement;
 let connectionStatus: HTMLElement;
+let sidePanelToggle: HTMLButtonElement;
+let sidePanel: HTMLElement;
 
 // ---------------------------------------------------------------------------
 // Initialization
@@ -39,49 +35,57 @@ let connectionStatus: HTMLElement;
 
 function init(): void {
   // Get DOM elements
-  canvas = document.getElementById('main-canvas') as HTMLCanvasElement;
-  timelineCanvas = document.getElementById('timeline-canvas') as HTMLCanvasElement;
-  deviceSelect = document.getElementById('device-select') as HTMLSelectElement;
-  bootSelect = document.getElementById('boot-select') as HTMLSelectElement;
-  deviceList = document.getElementById('device-list') as HTMLUListElement;
-  bootList = document.getElementById('boot-list') as HTMLUListElement;
-  recordsBody = document.getElementById('records-body') as HTMLTableSectionElement;
-  statusLeft = document.getElementById('status-left') as HTMLElement;
-  statusRight = document.getElementById('status-right') as HTMLElement;
-  connectionStatus = document.getElementById('connection-status') as HTMLElement;
+  const timelineCanvas = document.getElementById(
+    "timeline-canvas",
+  ) as HTMLCanvasElement;
+  deviceSelect = document.getElementById("device-select") as HTMLSelectElement;
+  bootSelect = document.getElementById("boot-select") as HTMLSelectElement;
+  deviceList = document.getElementById("device-list") as HTMLUListElement;
+  bootList = document.getElementById("boot-list") as HTMLUListElement;
+  recordsBody = document.getElementById(
+    "records-body",
+  ) as HTMLTableSectionElement;
+  statusLeft = document.getElementById("status-left") as HTMLElement;
+  statusRight = document.getElementById("status-right") as HTMLElement;
+  connectionStatus = document.getElementById(
+    "connection-status",
+  ) as HTMLElement;
 
-  const canvasTooltip = document.getElementById('canvas-tooltip') as HTMLElement;
-  const timelineTooltip = document.getElementById('timeline-tooltip') as HTMLElement;
-  const canvasContainer = document.getElementById('canvas-container') as HTMLElement;
+  const timelineTooltip = document.getElementById(
+    "timeline-tooltip",
+  ) as HTMLElement;
+  sidePanelToggle = document.getElementById(
+    "side-panel-toggle",
+  ) as HTMLButtonElement;
+  sidePanel = document.getElementById("side-panel") as HTMLElement;
 
   // Initialize components
-  viewport = new Viewport();
-  viewport.attach(canvasContainer);
-  renderer = new Renderer(canvas, viewport, canvasTooltip);
   timeline = new Timeline(timelineCanvas, timelineTooltip);
 
   // Event handlers
-  renderer.onDeviceClick = (device) => selectDevice(device);
   timeline.onMessageSelect = (msg) => {
     if (msg) {
       scrollToRecord(msg.seqno);
     }
   };
 
-  deviceSelect.addEventListener('change', () => {
+  deviceSelect.addEventListener("change", () => {
     selectDevice(deviceSelect.value || null);
   });
 
-  bootSelect.addEventListener('change', () => {
+  bootSelect.addEventListener("change", () => {
     selectBoot(bootSelect.value ? parseInt(bootSelect.value) : null);
   });
+
+  // Setup mobile side panel toggle
+  setupMobileSidePanel();
 
   // Setup resize handlers
   setupResize();
 
   // Initial resize
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+  resizeTimeline();
+  window.addEventListener("resize", resizeTimeline);
 
   // Load initial data
   loadDevices();
@@ -96,44 +100,42 @@ function init(): void {
 
 async function loadDevices(): Promise<void> {
   try {
-    connectionStatus.textContent = 'Connecting...';
-    connectionStatus.className = 'status';
+    connectionStatus.textContent = "Connecting...";
+    connectionStatus.className = "status";
 
     const res = await api.getDevices();
     devices = res.devices || [];
 
     connectionStatus.textContent = `${devices.length} device(s)`;
-    connectionStatus.className = 'status connected';
+    connectionStatus.className = "status connected";
 
     updateDeviceList();
-    updateDeviceNodes();
 
     statusLeft.textContent = `Loaded ${devices.length} device(s)`;
   } catch (err) {
-    connectionStatus.textContent = 'Connection error';
-    connectionStatus.className = 'status error';
-    statusLeft.textContent = `Error: ${err instanceof Error ? err.message : 'Unknown error'}`;
-    console.error('Failed to load devices:', err);
+    connectionStatus.textContent = "Connection error";
+    connectionStatus.className = "status error";
+    statusLeft.textContent = `Error: ${err instanceof Error ? err.message : "Unknown error"}`;
+    console.error("Failed to load devices:", err);
   }
 }
 
 async function loadBoots(device: string): Promise<void> {
   try {
-    statusLeft.textContent = 'Loading boots...';
+    statusLeft.textContent = "Loading boots...";
     const res = await api.getBoots(device);
     boots = res.boots || [];
     updateBootList();
-    updateDeviceNodes();  // Refresh to show boot count
     statusLeft.textContent = `${boots.length} boot session(s)`;
   } catch (err) {
-    statusLeft.textContent = `Error loading boots: ${err instanceof Error ? err.message : 'Unknown'}`;
-    console.error('Failed to load boots:', err);
+    statusLeft.textContent = `Error loading boots: ${err instanceof Error ? err.message : "Unknown"}`;
+    console.error("Failed to load boots:", err);
   }
 }
 
 async function loadRecords(device: string, bootId: number): Promise<void> {
   try {
-    statusLeft.textContent = 'Loading records...';
+    statusLeft.textContent = "Loading records...";
     const res = await api.getRecords(device, [bootId], { limit: 1000 });
     records = res.records || [];
 
@@ -143,8 +145,8 @@ async function loadRecords(device: string, bootId: number): Promise<void> {
     statusLeft.textContent = `${records.length} CAN message(s)`;
     statusRight.textContent = `Boot #${bootId}`;
   } catch (err) {
-    statusLeft.textContent = `Error loading records: ${err instanceof Error ? err.message : 'Unknown'}`;
-    console.error('Failed to load records:', err);
+    statusLeft.textContent = `Error loading records: ${err instanceof Error ? err.message : "Unknown"}`;
+    console.error("Failed to load records:", err);
   }
 }
 
@@ -159,10 +161,9 @@ function selectDevice(device: string | null): void {
   records = [];
 
   // Update UI
-  deviceSelect.value = device || '';
-  bootSelect.value = '';
+  deviceSelect.value = device || "";
+  bootSelect.value = "";
   bootSelect.disabled = !device;
-  renderer.setSelectedDevice(device);
   updateDeviceListSelection();
   updateBootList();
   updateRecordsTable();
@@ -177,13 +178,15 @@ function selectBoot(bootId: number | null): void {
   selectedBoot = bootId;
   records = [];
 
-  bootSelect.value = bootId?.toString() || '';
+  bootSelect.value = bootId?.toString() || "";
   updateBootListSelection();
   updateRecordsTable();
   timeline.clear();
 
   if (selectedDevice && bootId !== null) {
     loadRecords(selectedDevice, bootId);
+    // Collapse side panel on mobile after boot selection
+    collapseSidePanelOnMobile();
   }
 }
 
@@ -192,22 +195,22 @@ function selectBoot(bootId: number | null): void {
 // ---------------------------------------------------------------------------
 
 function updateDeviceList(): void {
-  deviceList.innerHTML = '';
+  deviceList.innerHTML = "";
   deviceSelect.innerHTML = '<option value="">Select device...</option>';
 
   for (const d of devices) {
     // List item
-    const li = document.createElement('li');
+    const li = document.createElement("li");
     li.dataset.device = d.device;
     li.innerHTML = `
       <span class="device-name">${escapeHtml(d.device)}</span>
       <span class="device-meta">UID: ${d.last_uid.toString(16).toUpperCase()} · ${formatTimeAgo(d.last_heard_ts)}</span>
     `;
-    li.addEventListener('click', () => selectDevice(d.device));
+    li.addEventListener("click", () => selectDevice(d.device));
     deviceList.appendChild(li);
 
     // Select option
-    const option = document.createElement('option');
+    const option = document.createElement("option");
     option.value = d.device;
     option.textContent = d.device;
     deviceSelect.appendChild(option);
@@ -219,35 +222,37 @@ function updateDeviceList(): void {
 }
 
 function updateDeviceListSelection(): void {
-  for (const li of deviceList.querySelectorAll('li')) {
+  for (const li of deviceList.querySelectorAll("li")) {
     if (li.dataset.device === selectedDevice) {
-      li.classList.add('selected');
+      li.classList.add("selected");
     } else {
-      li.classList.remove('selected');
+      li.classList.remove("selected");
     }
   }
 }
 
 function updateBootList(): void {
-  bootList.innerHTML = '';
+  bootList.innerHTML = "";
   bootSelect.innerHTML = '<option value="">Select boot...</option>';
 
   for (const b of boots) {
     // List item
-    const li = document.createElement('li');
+    const li = document.createElement("li");
     li.dataset.bootId = b.boot_id.toString();
-    const startTime = new Date(b.first_record.commit_ts * 1000).toLocaleString();
+    const startTime = new Date(
+      b.first_record.commit_ts * 1000,
+    ).toLocaleString();
     const endTime = new Date(b.last_record.commit_ts * 1000).toLocaleString();
     li.innerHTML = `
       <span class="boot-id">Boot #${b.boot_id}</span>
       <span class="boot-meta">${startTime}</span>
-      <span class="boot-meta">→ ${endTime}</span>
+      <span class="boot-meta">&rarr; ${endTime}</span>
     `;
-    li.addEventListener('click', () => selectBoot(b.boot_id));
+    li.addEventListener("click", () => selectBoot(b.boot_id));
     bootList.appendChild(li);
 
     // Select option
-    const option = document.createElement('option');
+    const option = document.createElement("option");
     option.value = b.boot_id.toString();
     option.textContent = `Boot #${b.boot_id}`;
     bootSelect.appendChild(option);
@@ -261,23 +266,23 @@ function updateBootList(): void {
 }
 
 function updateBootListSelection(): void {
-  for (const li of bootList.querySelectorAll('li')) {
+  for (const li of bootList.querySelectorAll("li")) {
     if (li.dataset.bootId === selectedBoot?.toString()) {
-      li.classList.add('selected');
+      li.classList.add("selected");
     } else {
-      li.classList.remove('selected');
+      li.classList.remove("selected");
     }
   }
 }
 
 function updateRecordsTable(): void {
-  recordsBody.innerHTML = '';
+  recordsBody.innerHTML = "";
 
   if (records.length === 0) {
     recordsBody.innerHTML = `
       <tr>
         <td colspan="6" class="empty-state">
-          ${selectedBoot === null ? 'Select a boot session to view records' : 'No records found'}
+          ${selectedBoot === null ? "Select a boot session to view records" : "No records found"}
         </td>
       </tr>
     `;
@@ -285,15 +290,16 @@ function updateRecordsTable(): void {
   }
 
   for (const r of records) {
-    const tr = document.createElement('tr');
+    const tr = document.createElement("tr");
     tr.dataset.seqno = r.seqno.toString();
-    const canIdStr = '0x' + r.frame.can_id.toString(16).toUpperCase().padStart(3, '0');
+    const canIdStr =
+      "0x" + r.frame.can_id.toString(16).toUpperCase().padStart(3, "0");
     tr.innerHTML = `
       <td class="mono timestamp">${r.hw_ts_us.toLocaleString()}</td>
       <td class="mono">${r.seqno}</td>
       <td class="mono can-id">${canIdStr}</td>
-      <td>${r.frame.extended ? '✓' : ''}</td>
-      <td>${r.frame.rtr ? '✓' : ''}</td>
+      <td>${r.frame.extended ? "✓" : ""}</td>
+      <td>${r.frame.rtr ? "✓" : ""}</td>
       <td class="mono can-data">${r.frame.data_hex.toUpperCase()}</td>
     `;
     recordsBody.appendChild(tr);
@@ -315,98 +321,60 @@ function updateTimeline(): void {
   timeline.setMessages(messages);
 }
 
-function updateDeviceNodes(): void {
-  const nodes: DeviceNode[] = devices.map(d => {
-    // Show boots.length if this device is selected, otherwise show -1 (unknown)
-    const deviceBootCount = selectedDevice === d.device ? boots.length : -1;
-    const now = Date.now() / 1000;
-    const isOnline = (now - d.last_heard_ts) < 60; // Online if heard in last minute
-
-    return {
-      device: d.device,
-      x: 0,
-      y: 0,
-      lastHeardTs: d.last_heard_ts,
-      lastUid: d.last_uid,
-      bootCount: deviceBootCount,
-      isOnline,
-    };
-  });
-
-  renderer.setDevices(nodes);
-}
-
 function scrollToRecord(seqno: number): void {
   const row = recordsBody.querySelector(`tr[data-seqno="${seqno}"]`);
   if (row) {
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    row.classList.add('selected');
-    setTimeout(() => row.classList.remove('selected'), 2000);
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.add("selected");
+    setTimeout(() => row.classList.remove("selected"), 2000);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Canvas and resize handling
+// Resize handling
 // ---------------------------------------------------------------------------
 
-function resizeCanvas(): void {
-  const container = canvas.parentElement!;
-  const dpr = window.devicePixelRatio || 1;
-  const w = container.clientWidth;
-  const h = container.clientHeight;
-
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-
+function resizeTimeline(): void {
   timeline.resize();
-  renderer.fitView();
 }
 
 function setupResize(): void {
-  // Timeline resize
-  const timelineResize = document.getElementById('timeline-resize')!;
-  const timelineContainer = document.getElementById('timeline-container')!;
-  setupVerticalResize(timelineResize, timelineContainer, 80, 400);
-
-  // Records resize
-  const recordsResize = document.getElementById('records-resize')!;
-  const recordsContainer = document.getElementById('records-container')!;
-  setupVerticalResize(recordsResize, recordsContainer, 100, 500);
+  const timelineResize = document.getElementById("timeline-resize")!;
+  const timelineContainer = document.getElementById("timeline-container")!;
+  setupVerticalResize(timelineResize, timelineContainer, 80, 500);
 }
 
 function setupVerticalResize(
   handle: HTMLElement,
   container: HTMLElement,
   minH: number,
-  maxH: number
+  maxH: number,
 ): void {
   let dragging = false;
   let startY = 0;
   let startH = 0;
 
-  handle.addEventListener('pointerdown', (e) => {
+  handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     dragging = true;
     startY = e.clientY;
     startH = container.offsetHeight;
     handle.setPointerCapture(e.pointerId);
-    document.body.style.cursor = 'ns-resize';
+    document.body.style.cursor = "ns-resize";
   });
 
-  handle.addEventListener('pointermove', (e) => {
+  handle.addEventListener("pointermove", (e) => {
     if (!dragging) return;
-    const newH = Math.max(minH, Math.min(maxH, startH - (e.clientY - startY)));
-    container.style.height = newH + 'px';
-    resizeCanvas();
+    const newH = Math.max(minH, Math.min(maxH, startH + (e.clientY - startY)));
+    container.style.height = newH + "px";
+    resizeTimeline();
   });
 
-  handle.addEventListener('pointerup', (e) => {
+  handle.addEventListener("pointerup", (e) => {
     if (!dragging) return;
     dragging = false;
     handle.releasePointerCapture(e.pointerId);
-    document.body.style.cursor = '';
+    document.body.style.cursor = "";
   });
 }
 
@@ -415,9 +383,35 @@ function setupVerticalResize(
 // ---------------------------------------------------------------------------
 
 function tick(): void {
-  renderer.render();
   timeline.render();
   requestAnimationFrame(tick);
+}
+
+// ---------------------------------------------------------------------------
+// Mobile support
+// ---------------------------------------------------------------------------
+
+function setupMobileSidePanel(): void {
+  sidePanelToggle.addEventListener("click", () => {
+    sidePanel.classList.toggle("collapsed");
+    const isCollapsed = sidePanel.classList.contains("collapsed");
+    sidePanelToggle.textContent = isCollapsed
+      ? "☰ Show Devices & Boots"
+      : "☰ Hide Devices & Boots";
+  });
+
+  // Auto-collapse side panel on mobile after selection
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    sidePanel.classList.add("collapsed");
+    sidePanelToggle.textContent = "☰ Show Devices & Boots";
+  }
+}
+
+function collapseSidePanelOnMobile(): void {
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    sidePanel.classList.add("collapsed");
+    sidePanelToggle.textContent = "☰ Show Devices & Boots";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -425,13 +419,17 @@ function tick(): void {
 // ---------------------------------------------------------------------------
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }[c] || c));
+  return s.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c] || c,
+  );
 }
 
 function formatTimeAgo(ts: number): string {
@@ -447,4 +445,4 @@ function formatTimeAgo(ts: number): string {
 // Start
 // ---------------------------------------------------------------------------
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener("DOMContentLoaded", init);
